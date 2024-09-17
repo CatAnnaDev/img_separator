@@ -19,65 +19,76 @@ macro_rules! time_it {
     ($context:literal, $s:block) => {
         let timer = std::time::Instant::now();
         $s
-        println!("{}: {}", $context, utils::time_to_human_time(timer));
+        let seconds = timer.elapsed().as_secs() % 60;
+        let minutes = (timer.elapsed().as_secs() / 60) % 60;
+        let hours = (timer.elapsed().as_secs() / 60) / 60;
+        println!("{}: {:02}:{:02}:{:02}", $context, hours, minutes, seconds);
     };
 }
 
-fn visit_dirs(dir: &Path, cb: &dyn Fn(&DirEntry)) -> io::Result<()> {
+fn visit_dirs<F: Fn(&DirEntry, &ImageFormat)>(dir: &Path, cb: &F, image_path_format: &ImageFormat) -> io::Result<()> {
     if dir.is_dir() {
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
             if path.is_dir() {
-                if !path.to_str().unwrap().contains("horizontal")&&
-                    !path.to_str().unwrap().contains("vertical")&&
+                if !path.to_str().unwrap().contains("horizontal") &&
+                    !path.to_str().unwrap().contains("vertical") &&
                     !path.to_str().unwrap().contains("square")
                 {
                     println!("Path: {}", path.display());
-                    visit_dirs(&path, cb)?;
+                    visit_dirs(&path, cb, image_path_format)?;
                 }
             } else {
-                cb(&entry);
+                cb(&entry, image_path_format);
             }
         }
     }
     Ok(())
 }
 
-fn process(name: &DirEntry) {
-    if let Some(parent) = name.path().parent() {
-        let horizontal_path = PathBuf::from(&parent).join("horizontal");
-        let vertical_path = PathBuf::from(&parent).join("vertical");
-        let square_path = PathBuf::from(&parent).join("square");
-        let _ = fs::create_dir_all(&horizontal_path);
-        let _ = fs::create_dir_all(&vertical_path);
-        let _ = fs::create_dir_all(&square_path);
-        let p = name.path();
-        match size(&p) {
-            Ok(e) => {
-                if e.width > e.height {
-                    let _ = fs::copy(&p, &horizontal_path.join(&p.file_name().unwrap()));
-                    let _ = fs::remove_file(&p);
-                } else if e.width == e.height {
-                    let _ = fs::copy(&p, &square_path.join(&p.file_name().unwrap()));
-                    let _ = fs::remove_file(&p);
-                } else {
-                    let _ = fs::copy(&p, &vertical_path.join(&p.file_name().unwrap()));
-                    let _ = fs::remove_file(&p);
-                }
+fn process(name: &DirEntry, image_path_format: &ImageFormat) {
+    let p = name.path();
+    match size(&p) {
+        Ok(e) => {
+            if e.width > e.height {
+                let _ = fs::copy(&p, &image_path_format.horizontal.join(&p.file_name().unwrap()));
+                let _ = fs::remove_file(&p);
+            } else if e.width == e.height {
+                let _ = fs::copy(&p, &image_path_format.square.join(&p.file_name().unwrap()));
+                let _ = fs::remove_file(&p);
+            } else {
+                let _ = fs::copy(&p, &image_path_format.vertical.join(&p.file_name().unwrap()));
+                let _ = fs::remove_file(&p);
             }
-            Err(e) => eprintln!("Error! {e}\n {}", p.display())
         }
+        Err(e) => eprintln!("Error! {e}\n {}", p.display())
     }
 }
 
+struct ImageFormat {
+    horizontal: PathBuf,
+    vertical: PathBuf,
+    square: PathBuf,
+    parent: PathBuf,
+}
 
-// only jpeg jpg webp png gif image
+
 fn main() -> Result<(), Box<dyn Error>> {
     let path = PathBuf::from("/Users/blap/Downloads/test");
-    time_it!("Global time:", {visit_dirs(&path, &process).expect("euh ?")});
 
+    let x = ImageFormat {
+        horizontal: path.join("horizontal"),
+        vertical: path.join("vertical"),
+        square: path.join("square"),
+        parent: path,
+    };
 
+    let _ = fs::create_dir_all(&x.horizontal);
+    let _ = fs::create_dir_all(&x.vertical);
+    let _ = fs::create_dir_all(&x.square);
+
+    time_it!("Global time:", {visit_dirs(&x.parent, &process, &x).expect("euh ?")});
     println!("End");
     Ok(())
 }

@@ -1,5 +1,4 @@
 use std::io::{BufRead, Seek};
-use std::time::Instant;
 
 use crate::{Endian, ImageResult};
 
@@ -36,11 +35,4 @@ pub fn read_u24<R: BufRead + Seek>(reader: &mut R, endianness: &Endian) -> Image
         Endian::Little => Ok(((buf[2] as u32) << 16) | ((buf[1] as u32) << 8) | (buf[0] as u32)),
         Endian::Big => Ok(((buf[0] as u32) << 16) | ((buf[1] as u32) << 8) | (buf[2] as u32)),
     }
-}
-
-pub fn time_to_human_time(time: Instant) -> String {
-    let seconds = time.elapsed().as_secs() % 60;
-    let minutes = (time.elapsed().as_secs() / 60) % 60;
-    let hours = (time.elapsed().as_secs() / 60) / 60;
-    format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
 }
